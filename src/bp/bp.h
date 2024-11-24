@@ -127,7 +127,10 @@ struct Br_Conf_struct;
 
 typedef struct Perceptron_struct {
   int32* weights;
+  int32 threshold;
 } Perceptron;
+
+#define GLOBAL_HIST_LENGTH 32 // Size for branch history register, may need to adjust
 
 typedef struct Bp_Data_struct {
   uns proc_id;
@@ -166,6 +169,8 @@ typedef struct Bp_Data_struct {
 
   List cbrs_in_machine;
 
+  Perceptron* perceptrons; // Array of perceptrons for branch instructions
+  uint32_t global_branch_history; // Global branch history register
 } Bp_Data;
 
 /**************************************************************************************/
@@ -178,6 +183,7 @@ typedef enum Bp_Id_enum {
   HYBRIDGP_BP,
   TAGESCL_BP,
   TAGESCL80_BP,
+  PERCEPTRON_BP,
 #define DEF_CBP(CBP_NAME, CBP_CLASS) CBP_CLASS##_BP,
 #include "cbp_table.def"
 #undef DEF_CBP
@@ -288,6 +294,11 @@ void bp_recover_op(Bp_Data*, Cf_Type, Recovery_Info*);
 
 void inc_bstat_fetched(Op* op);
 void inc_bstat_miss(Op* op);
+
+// I'm not sure where to declare these specific functions so I'm putting them here
+void init_perceptron(Bp_Data* bp_data, int num_perceptrons); // Initialize perceptrons, may need to init weight counts
+uint8_t perceptron_predict(Bp_Data* bp_data, Addr branch_address); // Predict branch using perceptron
+void perceptron_update(Bp_Data* bp_data, Addr branch_address, uint8_t outcome); // Update perceptron weights
 
 /**************************************************************************************/
 
