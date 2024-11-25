@@ -317,6 +317,8 @@ Flag bp_is_predictable(Bp_Data* bp_data, uns proc_id) {
 /******************************************************************************/
 /* bp_predict_op:  predicts the target of a control flow instruction */
 
+// TODO: This function needs to be modified to use our perceptron for predictions
+
 Addr bp_predict_op(Bp_Data* bp_data, Op* op, uns br_num, Addr fetch_addr) {
   Addr* btb_target;
   Addr  ibp_target;
@@ -1064,6 +1066,7 @@ void bp_resolve_op(Bp_Data* bp_data, Op* op) {
     INC_STAT_EVENT(op->proc_id, BP_MISP_PENALTY,
                    op->exec_cycle - op->issue_cycle);
   }
+  perceptron_update(bp_data, op->inst_info->addr, op->oracle_info.dir); // Update perceptron after branch resolution
 }
 
 
@@ -1122,4 +1125,56 @@ void bp_recover_op(Bp_Data* bp_data, Cf_Type cf_type, Recovery_Info* info) {
 
   if (FDIP_DUAL_PATH_PREF_UOC_ONLINE_ENABLE)
     increment_branch_mispredictions(info->PC);
+}
+
+void init_perceptrons(Bp_Data* bp_data, int perceptron_count) {
+  bp_data->perceptrons = malloc(sizeof(Perceptron) * perceptron_count);
+  for (int i = 0; i < perceptron_count; i++) {
+    bp_data->perceptrons[i].weights = malloc(sizeof(int32_t) * GLOBAL_HIST_LENGTH);
+    for (int j = 0; j < GLOBAL_HIST_LENGTH; j++) {
+      bp_data->perceptrons[i].weights[j] = 0;
+    }
+    bp_data->perceptrons[i].threshold = 2 * GLOBAL_HIST_LENGTH + 1; // This threashold can be modified later on
+  }
+  bp_data->global_hist = 0;
+}
+
+uint8_t perceptron_predict(Bp_Data* bp_data, Addr branch_address){ // Predict branch using perceptron
+  int index = branch_address % PERCEPTRON_COUNT; // Hash the branch address to get the index of the perceptron
+  Perceptron* p = &bp_data->perceptrons[index];
+
+  int dot_product = 0;
+  uint32_t global_hist = bp_data->global_hist;
+  for (int i = 0; i < GLOBAL_HIST_LENGTH; i++) {
+    int bit = (global_hist >> i) & 1; // Get the i-th bit of the global history
+    dot_product += (bit ? 1 : -1) * p->weights[i]; // Multiply the i-th bit of the global history with the i-th weight of the perceptron
+  }
+  return dot_product >= p->threshold ? TAKEN : NOT_TAKEN;
+}
+
+void perceptron_update(Bp_Data* bp_data, Addr branch_address, uint8_t outcome){
+  int index = branch_address % PERCEPTRON_COUNT;
+  Perceptron* p = &bp_data->perceptrons[index];
+
+  int dot_product = 0;
+  uint32_t global_hist = bp_data->global_hist;
+  for (int i = 0; i < GLOBAL_HIST_LENGTH; i++) {
+    int bit = (global_hist >> i) & 1;
+    dot_product += (bit ? 1 : -1) * p->weights[i];
+  }
+
+  // update weights if prediction was wrong
+  if ((dot_product >= p->threshold) != outcome) {
+    for (int i = 0; i < GLOBAL_HIST_LENGTH; i++) {
+      int bit = (global_hist >> i) & 1;
+      p->weights[i] += (bit ? 1 : -1) * (outcome ? 1 : -1);
+
+      // clamp weights to some arbitrary range, MAX and MIN WEIGHTS are placeholders, this will NOT compile
+      if (p->weights[i] > MAX_WEIGHT) p->weights[i] = MAX_WEIGHT;
+      if (p->weights[i] < MIN_WEIGHT) p->weights[i] = MIN_WEIGHT;
+    }
+  }
+
+  // update the global history
+  bp_data->global_hist = (bp_data->global_hist >> 1) | (outcome & 1);
 }
