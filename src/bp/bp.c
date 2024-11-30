@@ -1139,42 +1139,45 @@ void init_perceptrons(Bp_Data* bp_data, int perceptron_count) {
   bp_data->global_hist = 0;
 }
 
-uint8_t perceptron_predict(Bp_Data* bp_data, Addr branch_address){ // Predict branch using perceptron
-  int index = branch_address % PERCEPTRON_COUNT; // Hash the branch address to get the index of the perceptron
-  Perceptron* p = &bp_data->perceptrons[index];
+uint8_t perceptron_predict(Bp_Data* bp_data, Addr branch_address) {
+    int index = branch_address % NUM_PERCEPTRONS; // Map branch to perceptron
+    Perceptron* p = &bp_data->perceptrons[index];
 
-  int dot_product = 0;
-  uint32_t global_hist = bp_data->global_hist;
-  for (int i = 0; i < GLOBAL_HIST_LENGTH; i++) {
-    int bit = (global_hist >> i) & 1; // Get the i-th bit of the global history
-    dot_product += (bit ? 1 : -1) * p->weights[i]; // Multiply the i-th bit of the global history with the i-th weight of the perceptron
-  }
-  return dot_product >= p->threshold ? TAKEN : NOT_TAKEN;
-}
-
-void perceptron_update(Bp_Data* bp_data, Addr branch_address, uint8_t outcome){
-  int index = branch_address % PERCEPTRON_COUNT;
-  Perceptron* p = &bp_data->perceptrons[index];
-
-  int dot_product = 0;
-  uint32_t global_hist = bp_data->global_hist;
-  for (int i = 0; i < GLOBAL_HIST_LENGTH; i++) {
-    int bit = (global_hist >> i) & 1;
-    dot_product += (bit ? 1 : -1) * p->weights[i];
-  }
-
-  // update weights if prediction was wrong
-  if ((dot_product >= p->threshold) != outcome) {
+    int dot_product = 0;
+    uint32_t history = bp_data->global_branch_history;
     for (int i = 0; i < GLOBAL_HIST_LENGTH; i++) {
-      int bit = (global_hist >> i) & 1;
-      p->weights[i] += (bit ? 1 : -1) * (outcome ? 1 : -1);
-
-      // clamp weights to some arbitrary range, MAX and MIN WEIGHTS are placeholders, this will NOT compile
-      if (p->weights[i] > MAX_WEIGHT) p->weights[i] = MAX_WEIGHT;
-      if (p->weights[i] < MIN_WEIGHT) p->weights[i] = MIN_WEIGHT;
+        int bit = (history >> i) & 1;
+        dot_product += (bit ? 1 : -1) * p->weights[i];
     }
-  }
 
-  // update the global history
-  bp_data->global_hist = (bp_data->global_hist >> 1) | (outcome & 1);
+    // Prediction based on the sign of the dot product
+    return dot_product >= 0 ? TAKEN : NOT_TAKEN;
 }
+
+void perceptron_update(Bp_Data* bp_data, Addr branch_address, uint8_t outcome) {
+    int index = branch_address % NUM_PERCEPTRONS;
+    Perceptron* p = &bp_data->perceptrons[index];
+
+    // Update global history first
+    bp_data->global_branch_history = (bp_data->global_branch_history << 1) | (outcome & 1);
+
+    int dot_product = 0;
+    uint32_t history = bp_data->global_branch_history;
+    for (int i = 0; i < GLOBAL_HIST_LENGTH; i++) {
+        int bit = (history >> i) & 1;
+        dot_product += (bit ? 1 : -1) * p->weights[i];
+    }
+
+    // Update weights only if the prediction was incorrect
+    uint8_t prediction = (dot_product >= 0) ? TAKEN : NOT_TAKEN;
+    if (prediction != outcome) {
+        for (int i = 0; i < GLOBAL_HIST_LENGTH; i++) {
+            int bit = (history >> i) & 1;
+            p->weights[i] += (outcome ? 1 : -1) * (bit ? 1 : -1);
+            // Clamp weights to prevent overflow
+            if (p->weights[i] > MAX_WEIGHT) p->weights[i] = MAX_WEIGHT;
+            if (p->weights[i] < -MAX_WEIGHT) p->weights[i] = -MAX_WEIGHT;
+        }
+    }
+}
+
