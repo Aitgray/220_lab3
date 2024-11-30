@@ -133,6 +133,7 @@ typedef struct Perceptron_struct {
 #define GLOBAL_HIST_LENGTH 32 // Size for branch history register, may need to adjust
 const int MAX_WEIGHT = 2 * GLOBAL_HIST_LENGTH; // Maximum weight for perceptron
 const int MIN_WEIGHT = -(MAX_WEIGHT); // Minimum weight for perceptron
+const int NUM_PERCEPTRONS = 1024; // Number of perceptrons to use
 
 typedef struct Bp_Data_struct {
   uns proc_id;
