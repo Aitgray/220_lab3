@@ -51,8 +51,8 @@ class DPbase {
 public:
   std::vector<std::unique_ptr<Perceptron>> perceptrons; // Store Perceptron objects
   int perceptron_num;
-  const int MAX_WEIGHT = 50;
-  const int MIN_WEIGHT = -50;
+  const int MAX_WEIGHT = 2 * GLOBAL_HIST_LENGTH;
+  const int MIN_WEIGHT = -(MAX_WEIGHT);
 
   DPbase(int size) {
     perceptron_num=size;
@@ -76,18 +76,31 @@ public:
 void update(uns32 global_hist,Addr branch_address,uns8 outcome){
   int index = branch_address % perceptron_num;
   Perceptron* p = perceptrons[index].get();
-  // update weights
-    for (int i = 0; i < 32; i++) {
-      int bit = (global_hist >> i) & 1;
-      p->weights[i] += (bit ? 1 : -1) * (outcome ? 1 : -1);
-      // clamp weights to some arbitrary range, MAX and MIN WEIGHTS are placeholders, this will NOT compile
-      if (p->weights[i] > MAX_WEIGHT) p->weights[i] = MAX_WEIGHT;
-      if (p->weights[i] < MIN_WEIGHT) p->weights[i] = MIN_WEIGHT;
-    }
-}
+  
+  // Update global history
+  global_hist = (global_hist << 1) | (outcome & 1);
 
-  // Destructor is automatically managed due to smart pointers
-  ~DPbase() = default;
+  // Update weights
+  int dot_product = 0;
+  for(int i = 0; i < 32; i++){
+    int bit = (global_hist >> i) & 1;
+    dot_product += (bit ? 1 : -1) * p->weights[i];
+  }
+
+  // Prediction based on sign of dot product
+  uns8 prediction = dot_product >= 0 ? TAKEN : NOT_TAKEN;
+
+  // Update weights if prediction is incorrect
+  if(prediction != outcome){
+    for(int i = 0; i < 32; i++){
+      int bit = (global_hist >> i) & 1;
+      p->weights[i] +/ (outcome ? 1 : -1) * (bit ? 1 : -1);
+
+      // Clamp weights to MAX_WEIGHT and MIN_WEIGHT
+      if(p->weights[i] > MAX_WEIGHT) p->weights[i] = MAX_WEIGHT;
+      if(p->weights[i] < MIN_WEIGHT) p->weights[i] = MIN_WEIGHT;
+    }
+  }
 };
 
 // Global vector to store DPbase objects
