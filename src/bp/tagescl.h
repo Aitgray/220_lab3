@@ -28,6 +28,8 @@ extern "C" {
 
 #include "bp/bp.h"
 
+#define GLOBAL_HIST_LENGTH 32 // This can be changed later
+
 /*************Interface to Scarab***************/
 void bp_tagescl_init();
 void bp_tagescl_timestamp(Op* op);
