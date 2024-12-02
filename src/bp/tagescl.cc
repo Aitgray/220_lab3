@@ -95,9 +95,9 @@ void update(uns32 global_hist, Addr branch_address, uns8 outcome) {
       int bit = (global_hist >> i) & 1;
       p->weights[i] += (outcome ? 1 : -1) * (bit ? 1 : -1);
 
-      // Clamp weights to MAX_WEIGHT and MIN_WEIGHT
-      if(p->weights[i] > MAX_WEIGHT) p->weights[i] = MAX_WEIGHT;
-      if(p->weights[i] < MIN_WEIGHT) p->weights[i] = MIN_WEIGHT;
+      // Clamp weights to MAX_WEIGHT and MIN_WEIGHT (NOTE: Clamping makes the predictor less accurate)
+      // if(p->weights[i] > MAX_WEIGHT) p->weights[i] = MAX_WEIGHT;
+      // if(p->weights[i] < MIN_WEIGHT) p->weights[i] = MIN_WEIGHT;
     }
   }
 };

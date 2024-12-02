@@ -28,7 +28,12 @@ extern "C" {
 
 #include "bp/bp.h"
 
-#define GLOBAL_HIST_LENGTH 32 // This can be changed later
+/*
+Optimal History Lengths are determined by Hardware budget, refer to the table in the paper.
+*/
+
+// This can be changed later based on what is optimal for our hardware. We could also make it change dynamically, but that would be more complex.
+#define GLOBAL_HIST_LENGTH 62 
 
 /*************Interface to Scarab***************/
 void bp_tagescl_init();
